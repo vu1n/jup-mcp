@@ -8,6 +8,7 @@ import tokenRoutes from './routes/token.js';
 import priceRoutes from './routes/price.js';
 import triggerRoutes from './routes/trigger.js';
 import recurringRoutes from './routes/recurring.js';
+import { ValidationError, NotFoundError, UnauthorizedError, APIError, ServiceError } from './utils/errors.js';
 
 // Load environment variables
 dotenv.config();
@@ -62,10 +63,36 @@ app.get('/health', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  logger.error('Unhandled error:', err);
+  logger.error('Error occurred:', {
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+    body: req.body,
+    query: req.query,
+    params: req.params
+  });
+
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ status: 'error', message: 'Invalid request body format' });
+  }
+  if (err instanceof ValidationError) {
+    return res.status(400).json({ status: 'error', message: err.message });
+  }
+  if (err instanceof NotFoundError) {
+    return res.status(404).json({ status: 'error', message: err.message });
+  }
+  if (err instanceof UnauthorizedError) {
+    return res.status(401).json({ status: 'error', message: err.message });
+  }
+  if (err instanceof ServiceError || err instanceof APIError) {
+    return res.status(err.status || 500).json({ status: 'error', message: err.message });
+  }
+  // fallback
   res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined
+    status: 'error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'An unexpected error occurred',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
 

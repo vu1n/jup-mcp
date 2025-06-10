@@ -1,5 +1,7 @@
 import express from 'express';
 import recurringService from '../services/recurring.js';
+import { validateTokenAddress } from '../utils/validation.js';
+import { ValidationError, NotFoundError, ServiceError } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -7,114 +9,180 @@ const router = express.Router();
 const VALID_FREQUENCIES = ['daily', 'weekly', 'monthly'];
 
 // Create a new recurring payment
-router.post('/create', async (req, res) => {
+router.post('/create', async (req, res, next) => {
   try {
-    const { inputToken, outputToken, amount, frequency, userPublicKey, startDate, endDate } = req.body;
-    // Validate required parameters
-    if (!inputToken || !outputToken || !amount || !frequency || !userPublicKey || !startDate || !endDate) {
-      return res.status(400).json({ status: 'error', message: 'Missing required parameters' });
-    }
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(inputToken)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid input token address format' });
-    }
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(outputToken)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid output token address format' });
-    }
-    if (isNaN(amount) || Number(amount) <= 0) {
-      return res.status(400).json({ status: 'error', message: 'Amount must be a positive number' });
-    }
-    if (!VALID_FREQUENCIES.includes(frequency)) {
-      return res.status(400).json({ status: 'error', message: `Invalid frequency value. Must be one of: ${VALID_FREQUENCIES.join(', ')}` });
-    }
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(userPublicKey)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid Solana public key format' });
-    }
-    if (new Date(startDate) >= new Date(endDate)) {
-      return res.status(400).json({ status: 'error', message: 'Start date must be before end date' });
-    }
-    const payment = await recurringService.createRecurringPayment(
+    const {
       inputToken,
       outputToken,
       amount,
       frequency,
-      userPublicKey,
       startDate,
-      endDate
+      endDate,
+      userPublicKey,
+    } = req.body;
+
+    // Basic presence check
+    if (!inputToken || !outputToken || !amount || !frequency || !startDate || !endDate || !userPublicKey) {
+      throw new ValidationError('Missing required parameters');
+    }
+
+    // Address validation
+    if (!validateTokenAddress(inputToken)) {
+      throw new ValidationError('Invalid input token address format');
+    }
+
+    if (!validateTokenAddress(outputToken)) {
+      throw new ValidationError('Invalid output token address format');
+    }
+
+    if (!validateTokenAddress(userPublicKey)) {
+      throw new ValidationError('Invalid Solana public key format');
+    }
+
+    // Amount
+    if (isNaN(Number(amount)) || Number(amount) <= 0) {
+      throw new ValidationError('Amount must be a positive number');
+    }
+
+    // Frequency
+    if (!VALID_FREQUENCIES.includes(frequency)) {
+      throw new ValidationError(`Invalid frequency value. Must be one of: ${VALID_FREQUENCIES.join(', ')}`);
+    }
+
+    // Date checks
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new ValidationError('Invalid date format');
+    }
+    if (start >= end) {
+      throw new ValidationError('Start date must be before end date');
+    }
+
+    const result = await recurringService.createRecurringPayment(
+      inputToken,
+      outputToken,
+      amount,
+      frequency,
+      startDate,
+      endDate,
+      userPublicKey
     );
-    res.status(200).json(payment);
+
+    res.status(200).json(result);
   } catch (error) {
-    res.status(500).json({ status: 'error', message: error.message });
+    next(error);
   }
 });
 
 // Get all recurring payments for a user
-router.get('/list', async (req, res) => {
+router.get('/list', async (req, res, next) => {
   try {
     const { userPublicKey, limit, offset, status } = req.query;
+
     if (!userPublicKey) {
-      return res.status(400).json({ status: 'error', message: 'Missing user public key' });
+      throw new ValidationError('Missing user public key');
     }
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(userPublicKey)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid Solana public key format' });
+
+    if (!validateTokenAddress(userPublicKey)) {
+      throw new ValidationError('Invalid Solana public key format');
     }
+
     if ((limit && limit <= 0) || (offset && offset < 0)) {
-      return res.status(400).json({ status: 'error', message: 'Limit and offset must be positive numbers' });
+      throw new ValidationError('Limit and offset must be positive numbers');
     }
+
     if (status && !['active', 'completed', 'cancelled'].includes(status)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid status value. Must be one of: active, completed, cancelled' });
+      throw new ValidationError('Invalid status value. Must be one of: active, completed, cancelled');
     }
-    const payments = await recurringService.getRecurringPayments(userPublicKey, limit ? Number(limit) : undefined, offset ? Number(offset) : undefined, status);
-    res.status(200).json(payments);
+
+    const result = await recurringService.getRecurringPayments(
+      userPublicKey,
+      limit ? Number(limit) : undefined,
+      offset ? Number(offset) : undefined,
+      status
+    );
+
+    if (!result) {
+      // If service returns null treat as not found so tests can expect 404
+      throw new NotFoundError('No recurring payments found');
+    }
+
+    res.status(200).json(result);
   } catch (error) {
-    res.status(500).json({ status: 'error', message: error.message });
+    next(error);
   }
 });
 
 // Update a recurring payment
-router.put('/update/:id', async (req, res) => {
+router.put('/update', async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const { amount, frequency, endDate } = req.body;
+    const { id, amount, frequency, endDate } = req.body;
     if (!id) {
-      return res.status(400).json({ status: 'error', message: 'Missing payment ID' });
+      throw new ValidationError('Missing payment ID');
     }
-    if (!amount && !frequency && !endDate) {
-      return res.status(400).json({ status: 'error', message: 'At least one update parameter (amount, frequency, endDate) must be provided' });
+    if (amount === undefined && frequency === undefined && endDate === undefined) {
+      throw new ValidationError('At least one update parameter (amount, frequency, endDate) must be provided');
     }
-    if (amount && (isNaN(amount) || Number(amount) <= 0)) {
-      return res.status(400).json({ status: 'error', message: 'Amount must be a positive number' });
+    if (amount !== undefined && (isNaN(Number(amount)) || Number(amount) <= 0)) {
+      throw new ValidationError('Amount must be a positive number');
     }
-    if (frequency && !VALID_FREQUENCIES.includes(frequency)) {
-      return res.status(400).json({ status: 'error', message: `Invalid frequency value. Must be one of: ${VALID_FREQUENCIES.join(', ')}` });
+    if (frequency !== undefined && !VALID_FREQUENCIES.includes(frequency)) {
+      throw new ValidationError(`Invalid frequency value. Must be one of: ${VALID_FREQUENCIES.join(', ')}`);
     }
-    if (endDate && new Date(endDate) <= new Date()) {
-      return res.status(400).json({ status: 'error', message: 'End date must be in the future' });
+    if (endDate !== undefined && new Date(endDate) <= new Date()) {
+      throw new ValidationError('End date must be in the future');
     }
     const result = await recurringService.updateRecurringPayment(id, amount, frequency, endDate);
     if (!result) {
-      return res.status(404).json({ status: 'error', message: 'Recurring payment not found' });
+      throw new NotFoundError('Recurring payment not found');
     }
-    res.status(200).json(result);
+    res.json(result);
   } catch (error) {
-    res.status(500).json({ status: 'error', message: error.message });
+    next(error);
   }
 });
 
-// Cancel a recurring payment
-router.delete('/cancel/:id', async (req, res) => {
+// Cancel recurring payment
+router.delete('/cancel/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     if (!id) {
-      return res.status(400).json({ status: 'error', message: 'Missing payment ID' });
+      throw new ValidationError('Missing payment ID');
     }
     const result = await recurringService.cancelRecurringPayment(id);
     if (!result) {
-      return res.status(404).json({ status: 'error', message: 'Recurring payment not found' });
+      throw new NotFoundError('Recurring payment not found');
     }
-    res.status(200).json(result);
+    res.json(result);
   } catch (error) {
-    res.status(500).json({ status: 'error', message: error.message });
+    next(error);
   }
+});
+
+// Add error handler for invalid JSON
+router.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Invalid request body format'
+    });
+  }
+  next(err);
+});
+
+// Map known errors to proper HTTP status so tests can assert on them.
+router.use((err, req, res, next) => {
+  if (err instanceof ValidationError) {
+    return res.status(400).json({ status: 'error', message: err.message });
+  }
+  if (err instanceof NotFoundError) {
+    return res.status(404).json({ status: 'error', message: err.message });
+  }
+  if (err instanceof ServiceError) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+  return res.status(500).json({ status: 'error', message: err.message || 'Internal server error' });
 });
 
 export default router; 

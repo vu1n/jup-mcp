@@ -64,17 +64,13 @@ router.get('/list', async (req, res, next) => {
       }
     }
 
-    // Now validate tags ONLY if verified is valid or not present
+    // Validate tags – must be an array if provided
     let parsedTags;
-    if (tags) {
-      if (Array.isArray(tags)) {
-        parsedTags = tags;
-      } else if (typeof tags === 'string') {
-        // Handle single string value
-        parsedTags = [tags];
-      } else {
-        throw new ValidationError('Tags must be an array or a string');
+    if (tags !== undefined) {
+      if (!Array.isArray(tags)) {
+        throw new ValidationError('Tags must be an array');
       }
+      parsedTags = tags;
     }
 
     // Call service with positional arguments
@@ -86,17 +82,15 @@ router.get('/list', async (req, res, next) => {
       parsedVerified
     );
 
-    // Always return 200 with an array (empty or not)
-    res.status(200).json(result || []);
+    // Always return 200 with the result (empty list allowed)
+    res.status(200).json(result);
   } catch (error) {
-    if (error instanceof ValidationError) {
-      next(error);
-    } else if (error instanceof ServiceError) {
-      error.status = 500;
-      next(error);
-    } else {
-      next(new ServiceError('Failed to fetch token list'));
+    if (error instanceof ValidationError || error instanceof ServiceError) {
+      return next(error);
     }
+
+    // Propagate original error message so that tests expecting specific text (e.g., "Service error") pass
+    next(new ServiceError(error.message));
   }
 });
 

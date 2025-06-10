@@ -274,9 +274,10 @@ describe('Recurring API Endpoints', () => {
     });
   });
 
-  describe('PUT /recurring/update/:id', () => {
+  describe('PUT /recurring/update', () => {
     const paymentId = testUtils.generateTransactionId();
     const validPayload = {
+      id: paymentId,
       amount: testData.validAmounts.SOL,
       frequency: 'weekly',
       endDate: testUtils.createMockDate(Date.now() + 60 * 24 * 60 * 60 * 1000)
@@ -297,7 +298,7 @@ describe('Recurring API Endpoints', () => {
       };
       recurringService.updateRecurringPayment.mockResolvedValue(mockResponse);
       const response = await request(app)
-        .put(`/recurring/update/${paymentId}`)
+        .put('/recurring/update')
         .send(validPayload);
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockResponse);
@@ -311,7 +312,7 @@ describe('Recurring API Endpoints', () => {
 
     it('should validate amount is positive', async () => {
       const response = await request(app)
-        .put(`/recurring/update/${paymentId}`)
+        .put('/recurring/update')
         .send({
           ...validPayload,
           amount: '-1'
@@ -325,7 +326,7 @@ describe('Recurring API Endpoints', () => {
 
     it('should validate frequency value', async () => {
       const response = await request(app)
-        .put(`/recurring/update/${paymentId}`)
+        .put('/recurring/update')
         .send({
           ...validPayload,
           frequency: 'invalid-frequency'
@@ -339,7 +340,7 @@ describe('Recurring API Endpoints', () => {
 
     it('should validate end date is in the future', async () => {
       const response = await request(app)
-        .put(`/recurring/update/${paymentId}`)
+        .put('/recurring/update')
         .send({
           ...validPayload,
           endDate: testUtils.createMockDate(Date.now() - 24 * 60 * 60 * 1000) // yesterday
@@ -354,7 +355,7 @@ describe('Recurring API Endpoints', () => {
     it('should return 404 when payment not found', async () => {
       recurringService.updateRecurringPayment.mockResolvedValue(null);
       const response = await request(app)
-        .put(`/recurring/update/${paymentId}`)
+        .put('/recurring/update')
         .send(validPayload);
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
@@ -366,7 +367,7 @@ describe('Recurring API Endpoints', () => {
     it('should handle service errors', async () => {
       recurringService.updateRecurringPayment.mockRejectedValue(new Error('Service error'));
       const response = await request(app)
-        .put(`/recurring/update/${paymentId}`)
+        .put('/recurring/update')
         .send(validPayload);
       expect(response.status).toBe(500);
       expect(response.body).toEqual({

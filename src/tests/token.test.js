@@ -6,6 +6,20 @@ import { createTestApp, testData, testUtils } from './setup.js';
 
 const app = createTestApp(tokenRoutes, '/token');
 
+// Helper to encode query params with tags array using brackets so Express + qs
+// will parse back into an actual array.
+const encodeQuery = (query) => {
+  const { tags, ...rest } = query;
+  if (tags !== undefined) {
+    const encoded = { ...rest };
+    if (Array.isArray(tags)) {
+      encoded['tags[]'] = tags;
+    }
+    return encoded;
+  }
+  return query;
+};
+
 describe('Token API Endpoints', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -101,7 +115,7 @@ describe('Token API Endpoints', () => {
       tokenService.getTokenList.mockResolvedValue(mockResponse);
       const response = await request(app)
         .get('/token/list')
-        .query(validQuery);
+        .query(encodeQuery(validQuery));
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockResponse);
       expect(tokenService.getTokenList).toHaveBeenCalledWith(
@@ -116,11 +130,11 @@ describe('Token API Endpoints', () => {
     it('should validate limit and offset are positive', async () => {
       const response = await request(app)
         .get('/token/list')
-        .query({
+        .query(encodeQuery({
           ...validQuery,
           limit: -1,
           offset: -1
-        });
+        }));
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
         status: 'error',
@@ -131,10 +145,10 @@ describe('Token API Endpoints', () => {
     it('should validate maximum limit', async () => {
       const response = await request(app)
         .get('/token/list')
-        .query({
+        .query(encodeQuery({
           ...validQuery,
           limit: 1001
-        });
+        }));
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
         status: 'error',
@@ -145,10 +159,10 @@ describe('Token API Endpoints', () => {
     it('should validate search parameter format', async () => {
       const response = await request(app)
         .get('/token/list')
-        .query({
+        .query(encodeQuery({
           ...validQuery,
           search: { invalid: 'format' }
-        });
+        }));
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
         status: 'error',
@@ -173,10 +187,10 @@ describe('Token API Endpoints', () => {
     it('should validate verified is boolean', async () => {
       const response = await request(app)
         .get('/token/list')
-        .query({
+        .query(encodeQuery({
           ...validQuery,
           verified: 'not-a-boolean'
-        });
+        }));
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
         status: 'error',
@@ -188,7 +202,7 @@ describe('Token API Endpoints', () => {
       tokenService.getTokenList.mockRejectedValue(new Error('Service error'));
       const response = await request(app)
         .get('/token/list')
-        .query(validQuery);
+        .query(encodeQuery(validQuery));
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
         status: 'error',
@@ -204,7 +218,7 @@ describe('Token API Endpoints', () => {
       tokenService.getTokenList.mockResolvedValue(mockResponse);
       const response = await request(app)
         .get('/token/list')
-        .query(validQuery);
+        .query(encodeQuery(validQuery));
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockResponse);
     });

@@ -287,9 +287,10 @@ describe('Trigger API Endpoints', () => {
     });
   });
 
-  describe('PUT /trigger/update/:id', () => {
+  describe('PUT /trigger/update', () => {
     const orderId = testUtils.generateTransactionId();
     const validPayload = {
+      id: orderId,
       triggerPrice: '110',
       expiryDate: testUtils.createMockDate(Date.now() + 60 * 24 * 60 * 60 * 1000)
     };
@@ -309,7 +310,7 @@ describe('Trigger API Endpoints', () => {
       };
       triggerService.updateTriggerOrder.mockResolvedValue(mockResponse);
       const response = await request(app)
-        .put(`/trigger/update/${orderId}`)
+        .put('/trigger/update')
         .send(validPayload);
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockResponse);
@@ -322,7 +323,7 @@ describe('Trigger API Endpoints', () => {
 
     it('should validate trigger price is positive', async () => {
       const response = await request(app)
-        .put(`/trigger/update/${orderId}`)
+        .put('/trigger/update')
         .send({
           ...validPayload,
           triggerPrice: '-1'
@@ -336,7 +337,7 @@ describe('Trigger API Endpoints', () => {
 
     it('should validate expiry date is in the future', async () => {
       const response = await request(app)
-        .put(`/trigger/update/${orderId}`)
+        .put('/trigger/update')
         .send({
           ...validPayload,
           expiryDate: testUtils.createMockDate(Date.now() - 24 * 60 * 60 * 1000) // yesterday
@@ -351,7 +352,7 @@ describe('Trigger API Endpoints', () => {
     it('should return 404 when order not found', async () => {
       triggerService.updateTriggerOrder.mockResolvedValue(null);
       const response = await request(app)
-        .put(`/trigger/update/${orderId}`)
+        .put('/trigger/update')
         .send(validPayload);
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
@@ -363,7 +364,7 @@ describe('Trigger API Endpoints', () => {
     it('should handle service errors', async () => {
       triggerService.updateTriggerOrder.mockRejectedValue(new Error('Service error'));
       const response = await request(app)
-        .put(`/trigger/update/${orderId}`)
+        .put('/trigger/update')
         .send(validPayload);
       expect(response.status).toBe(500);
       expect(response.body).toEqual({

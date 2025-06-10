@@ -224,7 +224,8 @@ describe('Price API Endpoints', () => {
     it('should validate request body format', async () => {
       const response = await request(app)
         .post('/price/batch')
-        .send('invalid-json');
+        .set('Content-Type', 'application/json')
+        .send('{"]'); // invalid JSON
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
         status: 'error',
