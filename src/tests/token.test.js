@@ -175,7 +175,7 @@ describe('Token API Endpoints', () => {
         .get('/token/list')
         .query({
           ...validQuery,
-          verified: 'true'
+          verified: 'not-a-boolean'
         });
       expect(response.status).toBe(400);
       expect(response.body).toEqual({

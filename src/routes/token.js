@@ -52,8 +52,10 @@ router.get('/list', async (req, res, next) => {
     // Validate verified FIRST
     let parsedVerified;
     if (verified !== undefined) {
-      if (verified === 'true' || verified === 'false') {
-        parsedVerified = verified === 'true';
+      if (verified === 'true') {
+        parsedVerified = true;
+      } else if (verified === 'false') {
+        parsedVerified = false;
       } else if (typeof verified === 'boolean') {
         parsedVerified = verified;
       } else {
@@ -64,20 +66,14 @@ router.get('/list', async (req, res, next) => {
 
     // Now validate tags ONLY if verified is valid or not present
     let parsedTags;
-    if (tags !== undefined) {
+    if (tags) {
       if (Array.isArray(tags)) {
         parsedTags = tags;
       } else if (typeof tags === 'string') {
-        try {
-          parsedTags = JSON.parse(tags);
-        } catch (e) {
-          throw new ValidationError('Tags must be an array');
-        }
-        if (!Array.isArray(parsedTags)) {
-          throw new ValidationError('Tags must be an array');
-        }
+        // Handle single string value
+        parsedTags = [tags];
       } else {
-        throw new ValidationError('Tags must be an array');
+        throw new ValidationError('Tags must be an array or a string');
       }
     }
 
