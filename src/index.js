@@ -3,6 +3,11 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createLogger, format, transports } from 'winston';
 import ultraRoutes from './routes/ultra.js';
+import swapRoutes from './routes/swap.js';
+import tokenRoutes from './routes/token.js';
+import priceRoutes from './routes/price.js';
+import triggerRoutes from './routes/trigger.js';
+import recurringRoutes from './routes/recurring.js';
 
 // Load environment variables
 dotenv.config();
@@ -44,6 +49,11 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/ultra', ultraRoutes);
+app.use('/swap', swapRoutes);
+app.use('/token', tokenRoutes);
+app.use('/price', priceRoutes);
+app.use('/trigger', triggerRoutes);
+app.use('/recurring', recurringRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
