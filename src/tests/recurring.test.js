@@ -1,213 +1,417 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
-import express from 'express';
 import recurringRoutes from '../routes/recurring.js';
 import recurringService from '../services/recurring.js';
+import { createTestApp, testData, testUtils } from './setup.js';
 
-const app = express();
-app.use(express.json());
-app.use('/recurring', recurringRoutes);
+const app = createTestApp(recurringRoutes, '/recurring');
 
 describe('Recurring API Endpoints', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     recurringService.createRecurringPayment = jest.fn();
     recurringService.getRecurringPayments = jest.fn();
+    recurringService.updateRecurringPayment = jest.fn();
     recurringService.cancelRecurringPayment = jest.fn();
   });
 
   describe('POST /recurring/create', () => {
     const validPayload = {
-      inputToken: 'SOL',
-      outputToken: 'USDC',
-      amount: '1000000000', // 1 SOL in lamports
+      inputToken: testData.validTokens.SOL,
+      outputToken: testData.validTokens.USDC,
+      amount: testData.validAmounts.SOL,
       frequency: 'daily',
-      walletAddress: 'wallet123'
+      startDate: testUtils.createMockDate(),
+      endDate: testUtils.createMockDate(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+      userPublicKey: testData.validSolanaAddress
     };
 
     it('should create a recurring payment successfully', async () => {
       const mockResponse = {
-        paymentId: 'payment123',
+        id: testUtils.generateTransactionId(),
         status: 'active',
-        ...validPayload,
-        createdAt: '2024-01-01T00:00:00.000Z',
-        nextPaymentAt: '2024-01-02T00:00:00.000Z',
-        quote: {
-          estimatedOutput: '100000000',
-          price: '100',
-          priceImpact: '0.1'
-        }
+        inputToken: testData.validTokens.SOL,
+        outputToken: testData.validTokens.USDC,
+        amount: testData.validAmounts.SOL,
+        frequency: 'daily',
+        startDate: validPayload.startDate,
+        endDate: validPayload.endDate,
+        userPublicKey: testData.validSolanaAddress,
+        createdAt: testUtils.createMockDate()
       };
-
       recurringService.createRecurringPayment.mockResolvedValue(mockResponse);
-
       const response = await request(app)
         .post('/recurring/create')
         .send(validPayload);
-
       expect(response.status).toBe(200);
-      expect(response.body).toEqual(
-        expect.objectContaining({
-          paymentId: mockResponse.paymentId,
-          status: mockResponse.status,
-          inputToken: mockResponse.inputToken,
-          outputToken: mockResponse.outputToken,
-          amount: mockResponse.amount,
-          frequency: mockResponse.frequency,
-          walletAddress: mockResponse.walletAddress,
-          quote: mockResponse.quote,
-          createdAt: expect.any(String),
-          nextPaymentAt: expect.any(String)
-        })
+      expect(response.body).toEqual(mockResponse);
+      expect(recurringService.createRecurringPayment).toHaveBeenCalledWith(
+        validPayload.inputToken,
+        validPayload.outputToken,
+        validPayload.amount,
+        validPayload.frequency,
+        validPayload.startDate,
+        validPayload.endDate,
+        validPayload.userPublicKey
       );
-      expect(recurringService.createRecurringPayment).toHaveBeenCalledWith(validPayload);
+    });
+
+    it('should validate input token format', async () => {
+      const response = await request(app)
+        .post('/recurring/create')
+        .send({
+          ...validPayload,
+          inputToken: 'invalid-token'
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Invalid input token address format'
+      });
+    });
+
+    it('should validate output token format', async () => {
+      const response = await request(app)
+        .post('/recurring/create')
+        .send({
+          ...validPayload,
+          outputToken: 'invalid-token'
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Invalid output token address format'
+      });
+    });
+
+    it('should validate amount is positive', async () => {
+      const response = await request(app)
+        .post('/recurring/create')
+        .send({
+          ...validPayload,
+          amount: '-1'
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Amount must be a positive number'
+      });
+    });
+
+    it('should validate frequency value', async () => {
+      const response = await request(app)
+        .post('/recurring/create')
+        .send({
+          ...validPayload,
+          frequency: 'invalid-frequency'
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Invalid frequency value. Must be one of: daily, weekly, monthly'
+      });
+    });
+
+    it('should validate start date is before end date', async () => {
+      const response = await request(app)
+        .post('/recurring/create')
+        .send({
+          ...validPayload,
+          startDate: testUtils.createMockDate(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
+          endDate: testUtils.createMockDate(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Start date must be before end date'
+      });
+    });
+
+    it('should validate user public key format', async () => {
+      const response = await request(app)
+        .post('/recurring/create')
+        .send({
+          ...validPayload,
+          userPublicKey: 'invalid-address'
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Invalid Solana public key format'
+      });
     });
 
     it('should return 400 when required parameters are missing', async () => {
       const response = await request(app)
         .post('/recurring/create')
         .send({});
-
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
-        error: 'Missing required parameters'
+        status: 'error',
+        message: expect.stringContaining('Missing required parameters')
       });
     });
 
     it('should handle service errors', async () => {
       recurringService.createRecurringPayment.mockRejectedValue(new Error('Service error'));
-
       const response = await request(app)
         .post('/recurring/create')
         .send(validPayload);
-
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
-        error: 'Service error'
+        status: 'error',
+        message: 'Service error'
       });
     });
   });
 
-  describe('GET /recurring/list/:walletAddress', () => {
-    const walletAddress = 'wallet123';
+  describe('GET /recurring/list', () => {
+    const validQuery = {
+      userPublicKey: testData.validSolanaAddress,
+      limit: 10,
+      offset: 0,
+      status: 'active'
+    };
 
     it('should get recurring payments successfully', async () => {
       const mockResponse = {
         payments: [
           {
-            paymentId: 'payment123',
+            id: testUtils.generateTransactionId(),
             status: 'active',
-            inputToken: 'SOL',
-            outputToken: 'USDC',
-            amount: '1000000000',
+            inputToken: testData.validTokens.SOL,
+            outputToken: testData.validTokens.USDC,
+            amount: testData.validAmounts.SOL,
             frequency: 'daily',
-            walletAddress,
-            createdAt: '2024-01-01T00:00:00.000Z',
-            nextPaymentAt: '2024-01-02T00:00:00.000Z',
-            lastPaymentAt: null,
-            cancelledAt: null,
-            quote: {
-              estimatedOutput: '100000000',
-              price: '100',
-              priceImpact: '0.1'
-            }
+            startDate: testUtils.createMockDate(),
+            endDate: testUtils.createMockDate(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            userPublicKey: testData.validSolanaAddress,
+            createdAt: testUtils.createMockDate()
           }
-        ]
+        ],
+        total: 1
       };
-
       recurringService.getRecurringPayments.mockResolvedValue(mockResponse);
-
       const response = await request(app)
-        .get(`/recurring/list/${walletAddress}`);
-
+        .get('/recurring/list')
+        .query(validQuery);
       expect(response.status).toBe(200);
-      expect(response.body.payments[0]).toEqual(
-        expect.objectContaining({
-          paymentId: mockResponse.payments[0].paymentId,
-          status: mockResponse.payments[0].status,
-          inputToken: mockResponse.payments[0].inputToken,
-          outputToken: mockResponse.payments[0].outputToken,
-          amount: mockResponse.payments[0].amount,
-          frequency: mockResponse.payments[0].frequency,
-          walletAddress: mockResponse.payments[0].walletAddress,
-          quote: mockResponse.payments[0].quote,
-          createdAt: expect.any(String),
-          nextPaymentAt: expect.any(String)
-        })
+      expect(response.body).toEqual(mockResponse);
+      expect(recurringService.getRecurringPayments).toHaveBeenCalledWith(
+        validQuery.userPublicKey,
+        validQuery.limit,
+        validQuery.offset,
+        validQuery.status
       );
-      expect(recurringService.getRecurringPayments).toHaveBeenCalledWith(walletAddress);
     });
 
-    it('should return 400 when wallet address is missing', async () => {
+    it('should validate user public key format', async () => {
       const response = await request(app)
-        .get('/recurring/list/');
+        .get('/recurring/list')
+        .query({
+          ...validQuery,
+          userPublicKey: 'invalid-address'
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Invalid Solana public key format'
+      });
+    });
 
-      expect(response.status).toBe(404);
+    it('should validate limit and offset are positive', async () => {
+      const response = await request(app)
+        .get('/recurring/list')
+        .query({
+          ...validQuery,
+          limit: -1,
+          offset: -1
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Limit and offset must be positive numbers'
+      });
+    });
+
+    it('should validate status value', async () => {
+      const response = await request(app)
+        .get('/recurring/list')
+        .query({
+          ...validQuery,
+          status: 'invalid-status'
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Invalid status value. Must be one of: active, completed, cancelled'
+      });
     });
 
     it('should handle service errors', async () => {
       recurringService.getRecurringPayments.mockRejectedValue(new Error('Service error'));
-
       const response = await request(app)
-        .get(`/recurring/list/${walletAddress}`);
-
+        .get('/recurring/list')
+        .query(validQuery);
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
-        error: 'Service error'
+        status: 'error',
+        message: 'Service error'
+      });
+    });
+
+    it('should return empty list when no payments found', async () => {
+      const mockResponse = {
+        payments: [],
+        total: 0
+      };
+      recurringService.getRecurringPayments.mockResolvedValue(mockResponse);
+      const response = await request(app)
+        .get('/recurring/list')
+        .query(validQuery);
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockResponse);
+    });
+  });
+
+  describe('PUT /recurring/update/:id', () => {
+    const paymentId = testUtils.generateTransactionId();
+    const validPayload = {
+      amount: testData.validAmounts.SOL,
+      frequency: 'weekly',
+      endDate: testUtils.createMockDate(Date.now() + 60 * 24 * 60 * 60 * 1000)
+    };
+
+    it('should update recurring payment successfully', async () => {
+      const mockResponse = {
+        id: paymentId,
+        status: 'active',
+        inputToken: testData.validTokens.SOL,
+        outputToken: testData.validTokens.USDC,
+        amount: validPayload.amount,
+        frequency: validPayload.frequency,
+        startDate: testUtils.createMockDate(),
+        endDate: validPayload.endDate,
+        userPublicKey: testData.validSolanaAddress,
+        updatedAt: testUtils.createMockDate()
+      };
+      recurringService.updateRecurringPayment.mockResolvedValue(mockResponse);
+      const response = await request(app)
+        .put(`/recurring/update/${paymentId}`)
+        .send(validPayload);
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(mockResponse);
+      expect(recurringService.updateRecurringPayment).toHaveBeenCalledWith(
+        paymentId,
+        validPayload.amount,
+        validPayload.frequency,
+        validPayload.endDate
+      );
+    });
+
+    it('should validate amount is positive', async () => {
+      const response = await request(app)
+        .put(`/recurring/update/${paymentId}`)
+        .send({
+          ...validPayload,
+          amount: '-1'
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Amount must be a positive number'
+      });
+    });
+
+    it('should validate frequency value', async () => {
+      const response = await request(app)
+        .put(`/recurring/update/${paymentId}`)
+        .send({
+          ...validPayload,
+          frequency: 'invalid-frequency'
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Invalid frequency value. Must be one of: daily, weekly, monthly'
+      });
+    });
+
+    it('should validate end date is in the future', async () => {
+      const response = await request(app)
+        .put(`/recurring/update/${paymentId}`)
+        .send({
+          ...validPayload,
+          endDate: testUtils.createMockDate(Date.now() - 24 * 60 * 60 * 1000) // yesterday
+        });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'End date must be in the future'
+      });
+    });
+
+    it('should return 404 when payment not found', async () => {
+      recurringService.updateRecurringPayment.mockResolvedValue(null);
+      const response = await request(app)
+        .put(`/recurring/update/${paymentId}`)
+        .send(validPayload);
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Recurring payment not found'
+      });
+    });
+
+    it('should handle service errors', async () => {
+      recurringService.updateRecurringPayment.mockRejectedValue(new Error('Service error'));
+      const response = await request(app)
+        .put(`/recurring/update/${paymentId}`)
+        .send(validPayload);
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        status: 'error',
+        message: 'Service error'
       });
     });
   });
 
-  describe('POST /recurring/cancel', () => {
-    const paymentId = 'payment123';
+  describe('DELETE /recurring/cancel/:id', () => {
+    const paymentId = testUtils.generateTransactionId();
 
     it('should cancel recurring payment successfully', async () => {
       const mockResponse = {
-        paymentId,
+        id: paymentId,
         status: 'cancelled',
-        cancelledAt: '2024-01-03T00:00:00.000Z',
-        transactionId: 'tx123'
+        cancelledAt: testUtils.createMockDate()
       };
-
       recurringService.cancelRecurringPayment.mockResolvedValue(mockResponse);
-
       const response = await request(app)
-        .post('/recurring/cancel')
-        .send({ paymentId });
-
+        .delete(`/recurring/cancel/${paymentId}`);
       expect(response.status).toBe(200);
-      expect(response.body).toEqual(
-        expect.objectContaining({
-          paymentId: mockResponse.paymentId,
-          status: mockResponse.status,
-          transactionId: mockResponse.transactionId,
-          cancelledAt: expect.any(String)
-        })
-      );
+      expect(response.body).toEqual(mockResponse);
       expect(recurringService.cancelRecurringPayment).toHaveBeenCalledWith(paymentId);
     });
 
-    it('should return 400 when payment ID is missing', async () => {
+    it('should return 404 when payment not found', async () => {
+      recurringService.cancelRecurringPayment.mockResolvedValue(null);
       const response = await request(app)
-        .post('/recurring/cancel')
-        .send({});
-
-      expect(response.status).toBe(400);
+        .delete(`/recurring/cancel/${paymentId}`);
+      expect(response.status).toBe(404);
       expect(response.body).toEqual({
-        error: 'Missing payment ID'
+        status: 'error',
+        message: 'Recurring payment not found'
       });
     });
 
     it('should handle service errors', async () => {
       recurringService.cancelRecurringPayment.mockRejectedValue(new Error('Service error'));
-
       const response = await request(app)
-        .post('/recurring/cancel')
-        .send({ paymentId });
-
+        .delete(`/recurring/cancel/${paymentId}`);
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
-        error: 'Service error'
+        status: 'error',
+        message: 'Service error'
       });
     });
   });

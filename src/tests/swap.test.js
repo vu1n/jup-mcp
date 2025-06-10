@@ -1,12 +1,10 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
-import express from 'express';
+import { createTestApp } from './setup.js';
 import swapRoutes from '../routes/swap.js';
 import swapService from '../services/swap.js';
 
-const app = express();
-app.use(express.json());
-app.use('/swap', swapRoutes);
+const app = createTestApp(swapRoutes, '/swap');
 
 describe('Swap API Endpoints', () => {
   beforeEach(() => {

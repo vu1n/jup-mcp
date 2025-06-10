@@ -46,38 +46,84 @@ npm run dev
 
 The server will be available at `http://localhost:3000`.
 
-## Usage
+## API Usage
 
 ### Ultra API
 
-Get a swap quote:
+#### Get a swap quote
 ```bash
 curl -X POST http://localhost:3000/ultra/quote \
   -H "Content-Type: application/json" \
   -d '{
     "inputToken": "SOL",
     "outputToken": "USDC",
-    "amount": "1"
+    "amount": "1",
+    "slippage": 1
   }'
+```
+
+#### Execute a swap
+```bash
+curl -X POST http://localhost:3000/ultra/swap \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inputToken": "SOL",
+    "outputToken": "USDC",
+    "amount": "1",
+    "slippage": 1,
+    "userPublicKey": "YOUR_SOLANA_PUBLIC_KEY",
+    "wrapUnwrapSOL": true
+  }'
+```
+
+#### Get swap history
+```bash
+curl -X GET http://localhost:3000/ultra/history \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userPublicKey": "YOUR_SOLANA_PUBLIC_KEY",
+    "limit": 10,
+    "offset": 0
+  }'
+```
+
+#### Get swap status
+```bash
+curl -X GET http://localhost:3000/ultra/status/{swapId}
 ```
 
 ### Swap API
 
-Get supported tokens:
+#### Get supported tokens
 ```bash
 curl http://localhost:3000/swap/tokens
 ```
 
+#### Get recent swap transactions
+```bash
+curl http://localhost:3000/swap/transactions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "limit": 10,
+    "offset": 0
+  }'
+```
+
 ### Token API
 
-Get token information:
+#### Get token information
 ```bash
 curl http://localhost:3000/token/info/TOKEN_ADDRESS
 ```
 
+#### Get token list
+```bash
+curl http://localhost:3000/token/list
+```
+
 ### Price API
 
-Get token price:
+#### Get token price
 ```bash
 curl http://localhost:3000/price \
   -H "Content-Type: application/json" \
@@ -89,7 +135,7 @@ curl http://localhost:3000/price \
 
 ### Trigger API
 
-Create a limit order:
+#### Create a limit order
 ```bash
 curl -X POST http://localhost:3000/trigger/create \
   -H "Content-Type: application/json" \
@@ -97,13 +143,28 @@ curl -X POST http://localhost:3000/trigger/create \
     "inputToken": "SOL",
     "outputToken": "USDC",
     "amount": "1",
-    "triggerPrice": "100"
+    "triggerPrice": "100",
+    "userPublicKey": "YOUR_SOLANA_PUBLIC_KEY"
+  }'
+```
+
+#### Get active trigger orders
+```bash
+curl http://localhost:3000/trigger/list/YOUR_SOLANA_PUBLIC_KEY
+```
+
+#### Cancel trigger order
+```bash
+curl -X POST http://localhost:3000/trigger/cancel \
+  -H "Content-Type: application/json" \
+  -d '{
+    "orderId": "ORDER_ID"
   }'
 ```
 
 ### Recurring API
 
-Create a recurring payment:
+#### Create a recurring payment
 ```bash
 curl -X POST http://localhost:3000/recurring/create \
   -H "Content-Type: application/json" \
@@ -111,9 +172,52 @@ curl -X POST http://localhost:3000/recurring/create \
     "inputToken": "SOL",
     "outputToken": "USDC",
     "amount": "1",
-    "frequency": "daily"
+    "frequency": "daily",
+    "walletAddress": "YOUR_SOLANA_PUBLIC_KEY"
   }'
 ```
+
+#### Get active recurring payments
+```bash
+curl http://localhost:3000/recurring/list/YOUR_SOLANA_PUBLIC_KEY
+```
+
+#### Cancel recurring payment
+```bash
+curl -X POST http://localhost:3000/recurring/cancel \
+  -H "Content-Type: application/json" \
+  -d '{
+    "paymentId": "PAYMENT_ID"
+  }'
+```
+
+#### Update recurring payment
+```bash
+curl -X PUT http://localhost:3000/recurring/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "paymentId": "PAYMENT_ID",
+    "amount": "2",
+    "frequency": "weekly"
+  }'
+```
+
+## Error Handling
+
+The MCP server uses standard HTTP status codes and returns error responses in the following format:
+
+```json
+{
+  "status": "error",
+  "message": "Error description"
+}
+```
+
+Common error codes:
+- 400: Bad Request (missing or invalid parameters)
+- 401: Unauthorized (authentication required)
+- 404: Not Found (resource not found)
+- 500: Internal Server Error (server-side error)
 
 ## Deployment
 
