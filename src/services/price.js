@@ -1,42 +1,57 @@
 import axios from 'axios';
-
-const JUP_API_BASE_URL = process.env.JUP_API_BASE_URL || 'https://quote-api.jup.ag/v6';
+import { JUP_API_CONFIG } from '../config/api.js';
 
 class PriceService {
   constructor() {
     this.client = axios.create({
-      baseURL: JUP_API_BASE_URL,
-      timeout: parseInt(process.env.JUP_API_TIMEOUT || '30000'),
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      baseURL: JUP_API_CONFIG.BASE_URL,
+      timeout: JUP_API_CONFIG.TIMEOUT,
+      headers: JUP_API_CONFIG.HEADERS
     });
   }
 
   async getPrice(tokenA, tokenB) {
     try {
-      // TODO: Implement price request to jup.ag API
+      const response = await this.client.get(JUP_API_CONFIG.ENDPOINTS.PRICE, {
+        params: {
+          id: `${tokenA}/${tokenB}`
+        }
+      });
+
       return {
         tokenA,
         tokenB,
-        price: '1.0',
-        timestamp: new Date().toISOString()
+        price: response.data.data.price,
+        timestamp: response.data.data.timestamp,
+        vsToken: response.data.data.vsToken
       };
     } catch (error) {
+      if (error.response) {
+        throw new Error(`Failed to get price: ${error.response.data.message || error.message}`);
+      }
       throw new Error(`Failed to get price: ${error.message}`);
     }
   }
 
   async getPrices(pairs) {
     try {
-      // TODO: Implement multiple prices request to jup.ag API
-      return pairs.map(({ tokenA, tokenB }) => ({
-        tokenA,
-        tokenB,
-        price: '1.0',
-        timestamp: new Date().toISOString()
+      const response = await this.client.post(JUP_API_CONFIG.ENDPOINTS.PRICE_BATCH, {
+        pairs: pairs.map(({ tokenA, tokenB }) => ({
+          id: `${tokenA}/${tokenB}`
+        }))
+      });
+
+      return response.data.data.map((price, index) => ({
+        tokenA: pairs[index].tokenA,
+        tokenB: pairs[index].tokenB,
+        price: price.price,
+        timestamp: price.timestamp,
+        vsToken: price.vsToken
       }));
     } catch (error) {
+      if (error.response) {
+        throw new Error(`Failed to get prices: ${error.response.data.message || error.message}`);
+      }
       throw new Error(`Failed to get prices: ${error.message}`);
     }
   }
