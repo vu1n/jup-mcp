@@ -116,11 +116,8 @@ class TriggerService {
         updatedAt: new Date().toISOString()
       };
     } catch (error) {
-      if (error.response?.status === 404) {
-        return null;
-      }
-      if (error.response?.data?.message?.includes('not found')) {
-        return null;
+      if (error.response?.status === 404 || error.response?.data?.message?.includes('not found')) {
+        throw new NotFoundError('Trigger order not found');
       }
       if (error.response) {
         throw new ServiceError(`Failed to update trigger order: ${error.response.data.message || error.message}`, error.response.status);
@@ -141,8 +138,8 @@ class TriggerService {
         cancelledAt: new Date().toISOString()
       };
     } catch (error) {
-      if (error.response?.status === 404) {
-        return null;
+      if (error.response?.status === 404 || error.response?.data?.message?.includes('not found')) {
+        throw new NotFoundError('Trigger order not found');
       }
       if (error.response) {
         throw new ServiceError(`Failed to cancel trigger order: ${error.response.data.message || error.message}`, error.response.status);

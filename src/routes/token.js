@@ -1,124 +1,106 @@
 import express from 'express';
 import tokenService from '../services/token.js';
 import { validateTokenAddress } from '../utils/validation.js';
+import { ValidationError, NotFoundError, ServiceError } from '../utils/errors.js';
 
 const router = express.Router();
 
 // Get token information
-router.get('/info/:tokenAddress', async (req, res) => {
+router.get('/info/:tokenAddress', async (req, res, next) => {
   try {
     const { tokenAddress } = req.params;
     
     if (!validateTokenAddress(tokenAddress)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid token address format'
-      });
+      throw new ValidationError('Invalid token address format');
     }
 
     const result = await tokenService.getTokenInfo(tokenAddress);
     if (!result) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Token not found'
-      });
+      throw new NotFoundError('Token not found');
     }
-    res.json(result);
+    res.status(200).json(result);
   } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      message: error.message
-    });
+    next(error);
   }
 });
 
 // Get token list
-router.get('/list', async (req, res) => {
+router.get('/list', async (req, res, next) => {
   try {
-    let { limit = 10, offset = 0, search, tags, verified } = req.query;
+    const { limit = 10, offset = 0, search, tags, verified } = req.query;
 
-    // Parse limit and offset
+    // Validate limit
     const parsedLimit = parseInt(limit);
-    const parsedOffset = parseInt(offset);
-    if (isNaN(parsedLimit) || isNaN(parsedOffset) || parsedLimit < 0 || parsedOffset < 0) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Limit and offset must be positive numbers'
-      });
+    if (isNaN(parsedLimit) || parsedLimit <= 0) {
+      throw new ValidationError('Limit and offset must be positive numbers');
     }
     if (parsedLimit > 1000) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Maximum limit is 1000'
-      });
+      throw new ValidationError('Maximum limit is 1000');
     }
 
-    // Parse tags as array if present
-    if (tags !== undefined) {
-      if (typeof tags === 'string') {
-        // If it's a single string and not a JSON array, reject
-        if (!tags.startsWith('[')) {
-          return res.status(400).json({
-            status: 'error',
-            message: 'Tags must be an array'
-          });
-        }
-        try {
-          tags = JSON.parse(tags);
-        } catch {
-          return res.status(400).json({
-            status: 'error',
-            message: 'Tags must be an array'
-          });
-        }
-      }
-      if (!Array.isArray(tags)) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Tags must be an array'
-        });
-      }
+    // Validate offset
+    const parsedOffset = parseInt(offset);
+    if (isNaN(parsedOffset) || parsedOffset < 0) {
+      throw new ValidationError('Limit and offset must be positive numbers');
     }
 
-    // Validate search parameter
+    // Validate search
     if (search !== undefined && typeof search !== 'string') {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Search parameter must be a string'
-      });
+      throw new ValidationError('Search parameter must be a string');
     }
 
-    // Parse verified as boolean if present
+    // Validate verified FIRST
+    let parsedVerified;
     if (verified !== undefined) {
-      if (typeof verified === 'string') {
-        if (verified !== 'true' && verified !== 'false') {
-          return res.status(400).json({
-            status: 'error',
-            message: 'Verified must be a boolean'
-          });
-        }
-        verified = verified === 'true';
-      } else if (typeof verified !== 'boolean') {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Verified must be a boolean'
-        });
+      if (verified === 'true' || verified === 'false') {
+        parsedVerified = verified === 'true';
+      } else if (typeof verified === 'boolean') {
+        parsedVerified = verified;
+      } else {
+        // Throw immediately if verified is invalid
+        throw new ValidationError('Verified must be a boolean');
       }
     }
 
+    // Now validate tags ONLY if verified is valid or not present
+    let parsedTags;
+    if (tags !== undefined) {
+      if (Array.isArray(tags)) {
+        parsedTags = tags;
+      } else if (typeof tags === 'string') {
+        try {
+          parsedTags = JSON.parse(tags);
+        } catch (e) {
+          throw new ValidationError('Tags must be an array');
+        }
+        if (!Array.isArray(parsedTags)) {
+          throw new ValidationError('Tags must be an array');
+        }
+      } else {
+        throw new ValidationError('Tags must be an array');
+      }
+    }
+
+    // Call service with positional arguments
     const result = await tokenService.getTokenList(
       parsedLimit,
       parsedOffset,
       search,
-      tags,
-      verified
+      parsedTags,
+      parsedVerified
     );
-    res.json(result);
+
+    // Always return 200 with an array (empty or not)
+    res.status(200).json(result || []);
   } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      message: error.message
-    });
+    if (error instanceof ValidationError) {
+      next(error);
+    } else if (error instanceof ServiceError) {
+      error.status = 500;
+      next(error);
+    } else {
+      next(new ServiceError('Failed to fetch token list'));
+    }
   }
 });
 
