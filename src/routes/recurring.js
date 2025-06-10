@@ -32,7 +32,15 @@ router.post('/create', async (req, res) => {
     if (new Date(startDate) >= new Date(endDate)) {
       return res.status(400).json({ status: 'error', message: 'Start date must be before end date' });
     }
-    const payment = await recurringService.createRecurringPayment({ inputToken, outputToken, amount, frequency, userPublicKey, startDate, endDate });
+    const payment = await recurringService.createRecurringPayment(
+      inputToken,
+      outputToken,
+      amount,
+      frequency,
+      userPublicKey,
+      startDate,
+      endDate
+    );
     res.status(200).json(payment);
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -82,7 +90,7 @@ router.put('/update/:id', async (req, res) => {
     if (endDate && new Date(endDate) <= new Date()) {
       return res.status(400).json({ status: 'error', message: 'End date must be in the future' });
     }
-    const result = await recurringService.updateRecurringPayment(id, { amount, frequency, endDate });
+    const result = await recurringService.updateRecurringPayment(id, amount, frequency, endDate);
     if (!result) {
       return res.status(404).json({ status: 'error', message: 'Recurring payment not found' });
     }

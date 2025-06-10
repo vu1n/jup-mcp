@@ -267,4 +267,111 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - [jup.ag](https://jup.ag) for providing the API
-- All contributors who participate in this project 
+- All contributors who participate in this project
+
+## Using as an MCP Server
+
+The MCP server provides a standardized interface for interacting with the jup.ag API. Here's how to use it in your project:
+
+### Installation
+
+1. Install the package:
+   ```bash
+   npm install jup-mcp
+   ```
+
+2. Import and initialize the client:
+   ```javascript
+   const JupMCPClient = require('jup-mcp');
+   const client = new JupMCPClient('http://localhost:3000');
+   ```
+
+### Sample Implementation
+
+We provide sample implementations in the `samples` directory:
+
+- `client.js`: A complete client implementation showing how to interact with all API endpoints
+- `usage.js`: Example usage of the client for common operations
+- `config.js`: Sample configuration file for customizing the server behavior
+
+To run the samples:
+
+1. Copy the sample files to your project:
+   ```bash
+   cp -r samples/* your-project/
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install axios
+   ```
+
+3. Run the usage example:
+   ```bash
+   node usage.js
+   ```
+
+### Configuration
+
+The MCP server can be configured using environment variables or a configuration file. Here are the main configuration options:
+
+```javascript
+{
+  server: {
+    port: 3000,              // Server port
+    host: 'localhost',       // Server host
+    cors: {                  // CORS configuration
+      origin: '*',
+      methods: ['GET', 'POST', 'PUT', 'DELETE']
+    }
+  },
+  jupAg: {
+    baseUrl: 'https://quote-api.jup.ag/v6',  // jup.ag API base URL
+    timeout: 30000,          // Request timeout in milliseconds
+    retries: 3,              // Number of retry attempts
+    retryDelay: 1000         // Delay between retries in milliseconds
+  }
+}
+```
+
+### Error Handling
+
+The client includes built-in error handling for common scenarios:
+
+```javascript
+try {
+  const quote = await client.getQuote('SOL', 'USDC', '1');
+  console.log('Quote:', quote);
+} catch (error) {
+  if (error.message.includes('API Error')) {
+    // Handle API-specific errors
+    console.error('API Error:', error.message);
+  } else if (error.message.includes('No response')) {
+    // Handle connection errors
+    console.error('Connection Error:', error.message);
+  } else {
+    // Handle other errors
+    console.error('Error:', error.message);
+  }
+}
+```
+
+### Best Practices
+
+1. **Error Handling**: Always wrap API calls in try-catch blocks to handle potential errors gracefully.
+
+2. **Configuration**: Use environment variables for sensitive configuration values and deployment-specific settings.
+
+3. **Rate Limiting**: Be mindful of API rate limits and implement appropriate caching strategies.
+
+4. **Security**: When deploying to production:
+   - Configure CORS appropriately
+   - Use HTTPS
+   - Implement proper authentication if needed
+   - Set up rate limiting
+
+5. **Monitoring**: Implement logging and monitoring to track API usage and errors.
+
+### Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for more details. 

@@ -50,32 +50,30 @@ describe('Ultra API Endpoints', () => {
     });
 
     it('should validate input token format', async () => {
-      const invalidPayload = {
-        ...validPayload,
-        inputToken: 'invalid-token'
-      };
       const response = await request(app)
         .post('/ultra/quote')
-        .send(invalidPayload);
+        .send({
+          ...validPayload,
+          inputToken: 'invalid-token'
+        });
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
         status: 'error',
-        message: expect.stringContaining('Invalid token')
+        message: 'Invalid input token address format'
       });
     });
 
     it('should validate output token format', async () => {
-      const invalidPayload = {
-        ...validPayload,
-        outputToken: 'invalid-token'
-      };
       const response = await request(app)
         .post('/ultra/quote')
-        .send(invalidPayload);
+        .send({
+          ...validPayload,
+          outputToken: 'invalid-token'
+        });
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
         status: 'error',
-        message: expect.stringContaining('Invalid token')
+        message: 'Invalid output token address format'
       });
     });
 

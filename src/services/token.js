@@ -15,42 +15,47 @@ class TokenService {
 
   async getTokenInfo(tokenAddress) {
     try {
-      // TODO: Implement token info request to jup.ag API
+      const response = await this.client.get(`/token/${tokenAddress}`);
       return {
-        address: tokenAddress,
-        symbol: 'TOKEN',
-        name: 'Token Name',
-        decimals: 9,
-        logoURI: 'https://example.com/logo.png',
-        tags: ['stablecoin', 'defi']
+        address: response.data.address,
+        symbol: response.data.symbol,
+        name: response.data.name,
+        decimals: response.data.decimals,
+        logoURI: response.data.logoURI,
+        tags: response.data.tags,
+        verified: response.data.verified
       };
     } catch (error) {
+      if (error.response?.status === 404) {
+        return null;
+      }
       throw new Error(`Failed to get token info: ${error.message}`);
     }
   }
 
-  async getTokenList(params = {}) {
+  async getTokenList(limit, offset, search, tags, verified) {
     try {
-      const { tags, search } = params;
-      // TODO: Implement token list request to jup.ag API
-      return {
-        tokens: [
-          {
-            address: 'TOKEN1',
-            symbol: 'TKN1',
-            name: 'Token One',
-            decimals: 9
-          },
-          {
-            address: 'TOKEN2',
-            symbol: 'TKN2',
-            name: 'Token Two',
-            decimals: 6
-          }
-        ],
-        pagination: {
-          total: 2
+      const response = await this.client.get('/tokens', {
+        params: {
+          limit,
+          offset,
+          search,
+          tags: tags ? JSON.stringify(tags) : undefined,
+          verified
         }
+      });
+
+      return {
+        tokens: response.data.tokens.map(token => ({
+          address: token.address,
+          symbol: token.symbol,
+          name: token.name,
+          decimals: token.decimals,
+          logoURI: token.logoURI,
+          tags: token.tags,
+          verified: token.verified
+        })),
+        total: response.data.total
       };
     } catch (error) {
       throw new Error(`Failed to get token list: ${error.message}`);

@@ -10,10 +10,8 @@ class RecurringService {
     });
   }
 
-  async createRecurringPayment(params) {
+  async createRecurringPayment(inputToken, outputToken, amount, frequency, userPublicKey, startDate, endDate) {
     try {
-      const { inputToken, outputToken, amount, frequency, walletAddress } = params;
-      
       // First get the quote
       const quoteResponse = await this.client.post(JUP_API_CONFIG.ENDPOINTS.QUOTE, {
         inputMint: inputToken,
@@ -26,11 +24,13 @@ class RecurringService {
 
       // Create recurring payment
       const response = await this.client.post(JUP_API_CONFIG.ENDPOINTS.RECURRING, {
-        userPublicKey: walletAddress,
+        userPublicKey,
         inputMint: inputToken,
         outputMint: outputToken,
         amount,
         frequency,
+        startDate,
+        endDate,
         quoteResponse: quoteResponse.data,
         wrapUnwrapSOL: true,
         computeUnitPriceMicroLamports: 0,
@@ -39,13 +39,15 @@ class RecurringService {
       });
 
       return {
-        paymentId: response.data.paymentId,
+        id: response.data.paymentId,
         status: 'active',
         inputToken,
         outputToken,
         amount,
         frequency,
-        walletAddress,
+        userPublicKey,
+        startDate,
+        endDate,
         createdAt: new Date().toISOString(),
         nextPaymentAt: response.data.nextPaymentAt,
         quote: {
@@ -62,31 +64,67 @@ class RecurringService {
     }
   }
 
-  async getRecurringPayments(walletAddress) {
+  async getRecurringPayments(userPublicKey, limit, offset, status) {
     try {
-      const response = await this.client.get(`${JUP_API_CONFIG.ENDPOINTS.RECURRING}/${walletAddress}`);
+      const response = await this.client.get(`${JUP_API_CONFIG.ENDPOINTS.RECURRING}/${userPublicKey}`, {
+        params: { limit, offset, status }
+      });
       
       return {
         payments: response.data.payments.map(payment => ({
-          paymentId: payment.paymentId,
+          id: payment.paymentId,
           status: payment.status,
           inputToken: payment.inputMint,
           outputToken: payment.outputMint,
           amount: payment.amount,
           frequency: payment.frequency,
-          walletAddress: payment.userPublicKey,
+          userPublicKey: payment.userPublicKey,
+          startDate: payment.startDate,
+          endDate: payment.endDate,
           createdAt: payment.createdAt,
           nextPaymentAt: payment.nextPaymentAt,
           lastPaymentAt: payment.lastPaymentAt,
           cancelledAt: payment.cancelledAt,
           quote: payment.quote
-        }))
+        })),
+        total: response.data.total
       };
     } catch (error) {
       if (error.response) {
         throw new Error(`Failed to get recurring payments: ${error.response.data.message || error.message}`);
       }
       throw new Error(`Failed to get recurring payments: ${error.message}`);
+    }
+  }
+
+  async updateRecurringPayment(paymentId, amount, frequency, endDate) {
+    try {
+      const response = await this.client.put(`${JUP_API_CONFIG.ENDPOINTS.RECURRING}/${paymentId}`, {
+        amount,
+        frequency,
+        endDate
+      });
+
+      return {
+        id: paymentId,
+        status: 'active',
+        inputToken: response.data.inputMint,
+        outputToken: response.data.outputMint,
+        amount: response.data.amount,
+        frequency: response.data.frequency,
+        userPublicKey: response.data.userPublicKey,
+        startDate: response.data.startDate,
+        endDate: response.data.endDate,
+        updatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return null;
+      }
+      if (error.response) {
+        throw new Error(`Failed to update recurring payment: ${error.response.data.message || error.message}`);
+      }
+      throw new Error(`Failed to update recurring payment: ${error.message}`);
     }
   }
 
@@ -97,12 +135,14 @@ class RecurringService {
       });
 
       return {
-        paymentId,
+        id: paymentId,
         status: 'cancelled',
-        cancelledAt: new Date().toISOString(),
-        transactionId: response.data.transactionId
+        cancelledAt: new Date().toISOString()
       };
     } catch (error) {
+      if (error.response?.status === 404) {
+        return null;
+      }
       if (error.response) {
         throw new Error(`Failed to cancel recurring payment: ${error.response.data.message || error.message}`);
       }

@@ -31,7 +31,15 @@ router.post('/create', async (req, res) => {
     if (new Date(expiryDate) <= new Date()) {
       return res.status(400).json({ status: 'error', message: 'Expiry date must be in the future' });
     }
-    const order = await triggerService.createTriggerOrder({ inputToken, outputToken, amount, triggerPrice, userPublicKey, triggerType, expiryDate });
+    const order = await triggerService.createTriggerOrder(
+      inputToken,
+      outputToken,
+      amount,
+      triggerPrice,
+      userPublicKey,
+      triggerType,
+      expiryDate
+    );
     res.status(200).json(order);
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
@@ -78,7 +86,7 @@ router.put('/update/:id', async (req, res) => {
     if (expiryDate && new Date(expiryDate) <= new Date()) {
       return res.status(400).json({ status: 'error', message: 'Expiry date must be in the future' });
     }
-    const result = await triggerService.updateTriggerOrder(id, { triggerPrice, expiryDate });
+    const result = await triggerService.updateTriggerOrder(id, triggerPrice, expiryDate);
     if (!result) {
       return res.status(404).json({ status: 'error', message: 'Trigger order not found' });
     }
