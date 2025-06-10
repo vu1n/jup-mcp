@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { JUP_API_CONFIG } from '../config/api.js';
+import { ServiceError, NotFoundError } from '../utils/errors.js';
 
 class RecurringService {
   constructor() {
@@ -58,9 +59,9 @@ class RecurringService {
       };
     } catch (error) {
       if (error.response) {
-        throw new Error(`Failed to create recurring payment: ${error.response.data.message || error.message}`);
+        throw new ServiceError(`Failed to create recurring payment: ${error.response.data.message || error.message}`, error.response.status);
       }
-      throw new Error(`Failed to create recurring payment: ${error.message}`);
+      throw new ServiceError(`Failed to create recurring payment: ${error.message}`);
     }
   }
 
@@ -91,9 +92,9 @@ class RecurringService {
       };
     } catch (error) {
       if (error.response) {
-        throw new Error(`Failed to get recurring payments: ${error.response.data.message || error.message}`);
+        throw new ServiceError(`Failed to get recurring payments: ${error.response.data.message || error.message}`, error.response.status);
       }
-      throw new Error(`Failed to get recurring payments: ${error.message}`);
+      throw new ServiceError(`Failed to get recurring payments: ${error.message}`);
     }
   }
 
@@ -121,10 +122,13 @@ class RecurringService {
       if (error.response?.status === 404) {
         return null;
       }
-      if (error.response) {
-        throw new Error(`Failed to update recurring payment: ${error.response.data.message || error.message}`);
+      if (error.response?.data?.message?.includes('not found')) {
+        return null;
       }
-      throw new Error(`Failed to update recurring payment: ${error.message}`);
+      if (error.response) {
+        throw new ServiceError(`Failed to update recurring payment: ${error.response.data.message || error.message}`, error.response.status);
+      }
+      throw new ServiceError(`Failed to update recurring payment: ${error.message}`);
     }
   }
 
@@ -144,9 +148,9 @@ class RecurringService {
         return null;
       }
       if (error.response) {
-        throw new Error(`Failed to cancel recurring payment: ${error.response.data.message || error.message}`);
+        throw new ServiceError(`Failed to cancel recurring payment: ${error.response.data.message || error.message}`, error.response.status);
       }
-      throw new Error(`Failed to cancel recurring payment: ${error.message}`);
+      throw new ServiceError(`Failed to cancel recurring payment: ${error.message}`);
     }
   }
 }

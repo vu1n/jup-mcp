@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { JUP_API_CONFIG } from '../config/api.js';
+import { ServiceError, NotFoundError } from '../utils/errors.js';
 
 class PriceService {
   constructor() {
@@ -26,10 +27,13 @@ class PriceService {
         vsToken: response.data.data.vsToken
       };
     } catch (error) {
-      if (error.response) {
-        throw new Error(`Failed to get price: ${error.response.data.message || error.message}`);
+      if (error.response?.status === 404) {
+        throw new NotFoundError('Price not available');
       }
-      throw new Error(`Failed to get price: ${error.message}`);
+      if (error.response) {
+        throw new ServiceError(`Failed to get price: ${error.response.data.message || error.message}`, error.response.status);
+      }
+      throw new ServiceError(`Failed to get price: ${error.message}`);
     }
   }
 
@@ -50,9 +54,9 @@ class PriceService {
       }));
     } catch (error) {
       if (error.response) {
-        throw new Error(`Failed to get prices: ${error.response.data.message || error.message}`);
+        throw new ServiceError(`Failed to get prices: ${error.response.data.message || error.message}`, error.response.status);
       }
-      throw new Error(`Failed to get prices: ${error.message}`);
+      throw new ServiceError(`Failed to get prices: ${error.message}`);
     }
   }
 }

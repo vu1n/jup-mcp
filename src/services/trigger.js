@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { JUP_API_CONFIG } from '../config/api.js';
+import { ServiceError, NotFoundError } from '../utils/errors.js';
 
 class TriggerService {
   constructor() {
@@ -57,9 +58,9 @@ class TriggerService {
       };
     } catch (error) {
       if (error.response) {
-        throw new Error(`Failed to create trigger order: ${error.response.data.message || error.message}`);
+        throw new ServiceError(`Failed to create trigger order: ${error.response.data.message || error.message}`, error.response.status);
       }
-      throw new Error(`Failed to create trigger order: ${error.message}`);
+      throw new ServiceError(`Failed to create trigger order: ${error.message}`);
     }
   }
 
@@ -89,9 +90,9 @@ class TriggerService {
       };
     } catch (error) {
       if (error.response) {
-        throw new Error(`Failed to get trigger orders: ${error.response.data.message || error.message}`);
+        throw new ServiceError(`Failed to get trigger orders: ${error.response.data.message || error.message}`, error.response.status);
       }
-      throw new Error(`Failed to get trigger orders: ${error.message}`);
+      throw new ServiceError(`Failed to get trigger orders: ${error.message}`);
     }
   }
 
@@ -118,10 +119,13 @@ class TriggerService {
       if (error.response?.status === 404) {
         return null;
       }
-      if (error.response) {
-        throw new Error(`Failed to update trigger order: ${error.response.data.message || error.message}`);
+      if (error.response?.data?.message?.includes('not found')) {
+        return null;
       }
-      throw new Error(`Failed to update trigger order: ${error.message}`);
+      if (error.response) {
+        throw new ServiceError(`Failed to update trigger order: ${error.response.data.message || error.message}`, error.response.status);
+      }
+      throw new ServiceError(`Failed to update trigger order: ${error.message}`);
     }
   }
 
@@ -141,9 +145,9 @@ class TriggerService {
         return null;
       }
       if (error.response) {
-        throw new Error(`Failed to cancel trigger order: ${error.response.data.message || error.message}`);
+        throw new ServiceError(`Failed to cancel trigger order: ${error.response.data.message || error.message}`, error.response.status);
       }
-      throw new Error(`Failed to cancel trigger order: ${error.message}`);
+      throw new ServiceError(`Failed to cancel trigger order: ${error.message}`);
     }
   }
 }
